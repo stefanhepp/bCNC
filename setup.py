@@ -28,10 +28,7 @@ setup(
         "pyobjc ; sys_platform == 'darwin'",
         "pyobjc-core; sys_platform == 'darwin'",
         "pyobjc-framework-Quartz; sys_platform == 'darwin'",
-        # Windows XP can't handle pyserial newer than 3.0.1
-        #   (it can be installed, but does not work)
-        "pyserial ; sys_platform != 'win32'",
-        "pyserial<=3.0.1 ; sys_platform == 'win32'",
+        "pyserial",
         "numpy>=1.12",
         "svgelements>=1,<2",
         "shxparser>=0.0.2",

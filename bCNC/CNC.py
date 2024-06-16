@@ -761,6 +761,7 @@ class CNC:
     # 4 - manual tool change (No Probe)
 
     toolWaitAfterProbe = True  # wait at tool change position after probing
+    toolWaitAfterRestart = False # wait 5 seconds after spindle restart
     appendFeed = False  # append feed on every G1/G2/G3 commands to be used
     # for feed override testing
     # FIXME will not be needed after Grbl v1.0
@@ -1303,22 +1304,25 @@ class CNC:
                 else:
                     CNC.comment += ch
             elif ch == "=":
-                # check for assignments (FIXME very bad)
-                if not out and bracket == 0 and paren == 0:
-                    for i in " ()-+*/^$":
-                        if i in cmd:
-                            cmd += ch
-                            break
+                if not inComment:
+                    # check for assignments (FIXME very bad)
+                    if not out and bracket == 0 and paren == 0:
+                        for i in " ()-+*/^$":
+                            if i in cmd:
+                                cmd += ch
+                                break
                     else:
                         try:
                             return compile(line, "", "exec")
                         except Exception:
                             # FIXME show the error!!!!
                             return None
+                else:
+                    CNC.comment += ch
             elif ch == ";":
                 # Skip everything after the semicolon on normal lines
                 if not inComment and paren == 0 and bracket == 0:
-                    CNC.comment += line[i + 1:]
+                    CNC.comment += line[i + 1:].strip()
                     break
                 else:
                     expr += ch
@@ -1909,7 +1913,8 @@ class CNC:
         lines.append("g0 x[_x] y[_y]")  # ... x,y position
         lines.append("g0 z[_z]")  # ... z position
         lines.append("f[feed] [spindle]")  # ... feed and spindle
-        lines.append("g4 p5")  # wait 5s for spindle to speed up
+        if CNC.toolWaitAfterRestart:
+            lines.append("g4 p5")  # wait 5s for spindle to speed up
 
         # remember present tool
         self._lastTool = self.tool
