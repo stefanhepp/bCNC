@@ -8,6 +8,7 @@ import os
 import re
 import tempfile
 import threading
+import io
 
 import Camera
 from CNC import CNC
@@ -58,11 +59,13 @@ class Pendant(httpserver.BaseHTTPRequestHandler):
             httpserver.BaseHTTPRequestHandler.log_message(self, fmt, *args)
 
     # ----------------------------------------------------------------------
-    def do_HEAD(self, rc=200, content="text/html", cl=0):
+    def do_HEAD(self, rc=200, content="text/html", cl=0, headers_extra=[]):
         self.send_response(rc)
         self.send_header("Content-type", content)
         if cl != 0:
             self.send_header("Content-length", cl)
+        for header in headers_extra:
+            self.send_header(*header)
         self.end_headers()
 
     # ----------------------------------------------------------------------
@@ -140,45 +143,45 @@ class Pendant(httpserver.BaseHTTPRequestHandler):
         elif page == "/canvas":
             if not Image:
                 return
-            with tempfile.NamedTemporaryFile(suffix=".ps") as tmp:
-                httpd.app.canvas.postscript(
-                    file=tmp.name,
-                    colormode="color",
-                )
-                tmp.flush()
+            ps = httpd.app.canvas.postscript(colormode="color")
+            try:
+                with io.BytesIO() as out:
+                    Image.open(io.BytesIO(ps.encode('utf-8'))).save(out, "gif")
+                    self.do_HEAD(200, content="image/gif", cl=out.tell())
+                    out.seek(0)
+                    self.wfile.write(out.read())
+            except Exception:
+                filename = os.path.join(iconpath, "warn.gif")
                 try:
-                    with tempfile.NamedTemporaryFile(suffix=".gif") as out:
-                        Image.open(tmp.name).save(out.name, "GIF")
-                        out.flush()
-                        self.do_HEAD(200, content="image/gif", cl=out.tell())
-                        out.seek(0)
-                        self.wfile.write(out.read())
+                    f = open(filename,"rb")
+                    self.do_HEAD(200, content="image/gif", cl=self.get_file_size(f))
+                    self.wfile.write(f.read())
+                    f.close()
                 except Exception:
-                    filename = os.path.join(iconpath, "warn.gif")
-                    try:
-                        f = open(filename,"rb")
-                        self.do_HEAD(200, content="image/gif", cl=self.get_file_size(f))
-                        self.wfile.write(f.read())
-                        f.close()
-                    except Exception:
-                        pass
+                    pass
 
         elif page == "/camera":
             if not Camera.hasOpenCV():
                 return
             if Pendant.camera is None:
                 Pendant.camera = Camera.Camera("webcam")
-                Pendant.camera.start()
+                if not Pendant.camera.start():
+                    Pendant.camera = None
 
             if Pendant.camera.read():
-                Pendant.camera.save("camera.jpg")
                 try:
-                    f = open("camera.jpg","rb")
-                    self.do_HEAD(200, content="image/jpeg", cl=self.get_file_size(f))
-                    self.wfile.write(f.read())
-                    f.close()
+                    img = Pendant.camera.jpg()
+                    self.do_HEAD(200, content="image/jpeg", cl=len(img))
+                    self.wfile.write(img)
                 except Exception:
                     pass
+
+        elif page == "/text.ngc":
+            #Provide loaded g-code via web interface, so we can use nice webgl preview in the future
+            self.do_HEAD(200, content="text/text", headers_extra=[['Access-Control-Allow-Origin', '*']])
+            for block in httpd.app.gcode.blocks:
+                block.write_encoded(f=self.wfile)
+
         else:
             self.mainPage(page[1:])
 
