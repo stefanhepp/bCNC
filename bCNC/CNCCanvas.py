@@ -1796,7 +1796,7 @@ class CNCCanvas(Canvas):
             if abs(dc) < 1e-8:
                 return
             palette = []
-            for x in bmath.frange(lw, hg + 1e-10, (hg - lw) / 255.0):
+            for x in bmath.frange(lw, hg + 1e-6, (hg - lw) / 255.0):
                 i = int(math.floor(x / dc))
                 j = i + i >> 1  # 1.5*i
                 if i < 0:
